@@ -4,7 +4,7 @@ consistent &amp; local llama3 instance deployer with system prompt geared toward
 ## Overview
 - deployment of local code assistant
 - it clones open-webui and replaces docker-compose.yaml and docker-compose.gpu.yaml with files in this repo
-- For GPU support (flawless execution on gtx1080)
+- For Nvidia GPU support (flawless execution on gtx1080)
     - https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html#installing-the-nvidia-container-toolkit
     - it is expected for the host to have the right drivers installed
 - to build deployer
