@@ -1,4 +1,4 @@
-FROM llama3
+FROM llama3.1
 
 # system prompt tries to reduce conformity in answers
 SYSTEM """
