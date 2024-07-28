@@ -1,13 +1,12 @@
-FROM docker:latest
+FROM ghcr.io/open-webui/open-webui:ollama 
+# WORKDIR /app
+WORKDIR /app
 
-WORKDIR /usr/share/tmp
+RUN apt update \
+    && apt install -y \
+    lshw 
 
-RUN apk update \
-    && apk add bash \
-    && apk add git \
-    && git clone https://github.com/open-webui/open-webui.git
+COPY ./Modelfile /tmp/Modelfile
 
-WORKDIR /usr/share/tmp/open-webui
-
-COPY injectFiles/ .
-CMD [ "docker-compose", "-f", "docker-compose.yaml", "-f", "docker-compose.gpu.yaml", "up"]
+RUN ollama serve & sleep 2 \
+    && ollama create code-monkey -f /tmp/Modelfile
