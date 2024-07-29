@@ -1,2 +1,3 @@
 FROM mistral-nemo:12b-instruct-2407-q5_0
-PARAMETER num_gpu 32
+PARAMETER num_gpu 30
+PARAMETER num_ctx 4096
