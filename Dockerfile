@@ -5,6 +5,9 @@ RUN apt update          \
     lshw                \
     rsync
 
+# RUN mkdir -p /tmp/data/external-models
+# COPY ./shared-dir/external-models/* /tmp/data/external-models/
+
 COPY ./Modelfile /tmp/Modelfile
 
 RUN ollama serve & sleep 2                          \

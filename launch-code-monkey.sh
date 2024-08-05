@@ -11,17 +11,17 @@ CONTEXT_DIR=$(realpath "$1") || throw "First Argument: Context directory couldn'
 docker image ls | awk 'NR > 1 {print $1}' | grep "^$IMG_NAME$" 1>/dev/null \
     || throw "Docker image name '$IMG_NAME' couldn't be retrieved from local registry "
 
-if [ -d "$(dirname $0)/open-webui" ]; then cd open-webui && git pull && cd ..
-else git clone https://github.com/open-webui/open-webui.git || throw "cloning open-webui failed."
-fi
+SHARED_DIR='./shared-dir/data'
+EXPOSED_DIR="$SHARED_DIR/docs"
+mkdir -p "$EXPOSED_DIR"
 
-mkdir -p ./data/docs
-EXPOSED_DIR='./data/docs'
-# make user given directory discoverable by open-webui 
+# make user given code dir discoverable by open-webui 
 rsync -hvrP --exclude .git/ $CONTEXT_DIR $EXPOSED_DIR
 
+OLLAMA_DIR="$SHARED_DIR/ollama"
+mkdir -p "$OLLAMA_DIR"
 CONTAINER_NAME=code-monkey-webui
-mkdir -p ollama
-docker run --rm --detach --publish 3000:8080 --runtime=nvidia --gpus=all --env DATA_DIR=/tmp/data --volume ./ollama:/root/.ollama -v ./data:/tmp/data --name $CONTAINER_NAME $IMG_NAME
+
+docker run --rm --detach --publish 3000:8080 --runtime=nvidia --gpus=all --env DATA_DIR=/tmp/data --volume "$OLLAMA_DIR:/root/.ollama" -v "$SHARED_DIR:/tmp/data" --name $CONTAINER_NAME $IMG_NAME
 
 docker container logs -f $CONTAINER_NAME
