@@ -1,0 +1,11 @@
+codegeex4:9b-all-q4_1
+deepseek-coder:1.3b-base
+deepseek-coder:6.7b-base
+nomic-embed-text:v1.5
+qwen2.5-coder:1.5b-base-fp16
+starcoder2:3b-q3_K_S
+starcoder2:3b-q8_0
+starcoder2:7b-q3_K_S
+qwen2.5-coder:1.5b-base-q2_K
+qwen2.5-coder:1.5b-base-q5_0
+qwen2.5-coder:7b-base-q5_0
