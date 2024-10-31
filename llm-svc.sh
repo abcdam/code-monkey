@@ -10,6 +10,31 @@ OLLAMA_DIR="$SHARED_DIR/ollama"
 LOGS="$script_dir/logs"
 LOG_FILE_NAME="$(date +"%Y%m%d%H%M")_owebui.log"
 LOG_FILE="$LOGS/$LOG_FILE_NAME"
+PRETTYSYNOP_BIN="$HOME/lib/pretty-synopsis.pl"
+
+
+show_help() {
+    
+    SYNOPSIS=$(
+        echo "Usage: $(basename "$0");; [OPTIONS] COMMAND;;"\
+            "This script manages Docker container operations for a code assistance environment."
+    )
+
+    DESCRIPTION=$(
+        echo "Options;;"\
+                "-i;--image <name>;The name of the image in the local registry (default: $DEFAULT_IMG);;"\
+                "-p;--path <context_path>;Path to code directory that will be shared with instance"
+    )
+
+    COMMANDS=$(
+        echo "Commands;;"\
+                "build;Build the Docker image (default: $DEFAULT_IMG);;"\
+                "serve;Launch the container;;"\
+                "restart;Restart the container if already running or start it if not"
+    )
+    $PRETTYSYNOP_BIN --synopsis="$SYNOPSIS" --description="$DESCRIPTION"
+    $PRETTYSYNOP_BIN --description="$COMMANDS"
+}
 
 build_img() {
     docker build -t "$IMG_NAME" "$script_dir/"
@@ -50,7 +75,7 @@ run_container() {
     which ttmux >/dev/null && ttmux -s code-complete -w primary -t 1 "watch -n 0.3 nvidia-smi" "tail -f $LOG_FILE"
 }
 
-while getopts "i:p:" opt; do
+while getopts "i:p:h" opt; do
     case $opt in
         p|path)
             CONTEXT_PATH="$OPTARG"      \
@@ -60,6 +85,9 @@ while getopts "i:p:" opt; do
             ;;
         i|image)
             IMG_NAME="$OPTARG"
+            ;;
+        h|help)
+            show_help && exit 0
             ;;
         \?)
             throw "err: invalid flag: -$OPTARG"

@@ -5,14 +5,14 @@ RUN apt update          \
     lshw                \
     rsync
 
-COPY ./assets/models-cc.txt /tmp/
-COPY ./assets/quickfix.sh .
+COPY ./assets/models.yaml /tmp/
+COPY ./assets/runtime-prepper.py .
 
 # create config files
 RUN ollama serve & sleep 0.5
 
-# backup config files
+# backup config files because original path will be mounted from host
 RUN cp -r /root/.ollama /tmp/.ollama
 
-CMD [ "bash", "quickfix.sh" ]
+CMD [ "python", "runtime-prepper.py" ]
 
