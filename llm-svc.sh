@@ -5,8 +5,6 @@ source '/usr/lib/helper-func.sh'
 script_dir=$(dirname "$(realpath "$0")")
 DEFAULT_IMG='code-assist:default'
 CONTAINER_NAME='code-assist-owebui'
-SHARED_DIR='./shared-dir/data'
-OLLAMA_DIR="$SHARED_DIR/ollama"
 LOGS="$script_dir/logs"
 LOG_FILE_NAME="$(date +"%Y%m%d%H%M")_owebui.log"
 LOG_FILE="$LOGS/$LOG_FILE_NAME"
@@ -23,7 +21,6 @@ show_help() {
     DESCRIPTION=$(
         echo "Options;;"\
                 "-i;--image <name>;The name of the image in the local registry (default: $DEFAULT_IMG);;"\
-                "-p;--path <context_path>;Path to code directory that will be shared with instance"
     )
 
     COMMANDS=$(
@@ -45,27 +42,21 @@ run_container() {
     docker image ls | awk 'NR > 1 {print $1}' | grep -qE "^$repo_id$" \
         || throw "Docker image name '$IMG_NAME' couldn't be retrieved from local registry "
     
-    mkdir -p "$OLLAMA_DIR"
     mkdir -p "$LOGS"
 
-    if [ -n "$CONTEXT_PATH" ]; then
-        EXPOSED_DIR="$SHARED_DIR/docs" && mkdir -p "$EXPOSED_DIR"
-        # make user given code dir discoverable by open-webui 
-        rsync -hvrP --exclude .git/ "$CONTEXT_DIR" "$EXPOSED_DIR"
-    fi
-
-    docker run                                      \
-        --rm                                        \
-        --detach                                    \
-        --publish 3000:8080                         \
-        --runtime=nvidia                            \
-        --gpus=all                                  \
-        --volume "$OLLAMA_DIR:/root/.ollama"        \
-        --volume "$SHARED_DIR:/tmp/data"            \
-        --env DATA_DIR=/tmp/data                    \
-        --env-file "$script_dir/.env.dev"           \
-        --env-file "$script_dir/.env.secrets"       \
-        --name "$CONTAINER_NAME"                    \
+    docker run                                  \
+        --rm                                    \
+        --detach                                \
+        --publish 1111:8080                     \
+        --publish 4444:11434                    \
+        --runtime=nvidia                        \
+        --gpus=all                              \
+        --volume /root/.ollama/models           \
+        --volume /tmp/data/uploads              \
+        --env DATA_DIR=/tmp/data                \
+        --env-file "$script_dir/.env.dev"       \
+        --env-file "$script_dir/.env.secrets"   \
+        --name "$CONTAINER_NAME"                \
         "$IMG_NAME"
 
     echo "tail -f $LOG_FILE"
@@ -75,14 +66,8 @@ run_container() {
     which ttmux >/dev/null && ttmux -s code-complete -w primary -t 1 "watch -n 0.3 nvidia-smi" "tail -f $LOG_FILE"
 }
 
-while getopts "i:p:h" opt; do
+while getopts "i:h" opt; do
     case $opt in
-        p|path)
-            CONTEXT_PATH="$OPTARG"      \
-            && [ ! -f "$CONTEXT_PATH" ] \
-            && [ ! -d "$CONTEXT_PATH" ] \
-            && throw "err: Given path '$CONTEXT_PATH' not a valid file or directory."
-            ;;
         i|image)
             IMG_NAME="$OPTARG"
             ;;
@@ -119,9 +104,16 @@ done
 
 case $selection in
     0) throw "err: no valid command passed.";;
-    1) echo "Building image.." && build_img;;
-    2) echo "Launching container.." && run_container;;
-    3) echo "Building image and launching container.." && build_img && run_container;;
+    1) echo "Building image.."                          \
+        && build_img
+        ;;
+    2) echo "Launching container.."                     \
+        && run_container
+        ;;
+    3) echo "Building image and launching container.."  \
+        && build_img                                    \
+        && run_container
+        ;;
     restart) 
         docker container stop $CONTAINER_NAME 2>/dev/null || warn_ok "warn: container '$CONTAINER_NAME' not running, starting now.."
         run_container

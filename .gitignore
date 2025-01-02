@@ -1,3 +1,4 @@
-shared-dir
 **/*secrets
 logs/*
+openwebui.ini
+.vscode

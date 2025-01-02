@@ -1,0 +1,200 @@
+#!/usr/bin/env perl
+use v5.36.0;
+use strict;
+use warnings;
+
+use feature 'say';
+use Mojo::UserAgent;
+use Mojo::Promise;
+use File::Basename;
+use Path::Tiny;
+use JSON::PP;
+use Getopt::Long;
+use Cwd 'abs_path';
+use Config::Tiny;
+use Const::Fast;
+
+const my $CONF          => Config::Tiny->read(dirname(abs_path($0)) . '/openwebui.ini');
+const my $API_URL       => $CONF->{API}{api_url};
+const my $AUTH_TOKEN    => $CONF->{API}{token};
+const my $HEADER        => {Authorization => "Bearer $AUTH_TOKEN"};
+my $ua = Mojo::UserAgent->new;
+
+##
+# helper
+##
+sub get_knowledgebase_id {
+    my ($kb_name) = @_;
+    my $tx = $ua->get("$API_URL/knowledge/" => $HEADER);
+    if ($tx->res->is_success) {
+        my $response = decode_json($tx->res->body);
+        for my $kb (@$response) {
+            return $kb->{id} if $kb->{name} eq $kb_name;
+        }
+    }
+    return;
+}
+
+sub create_knowledgebase {
+    my ($kb_name) = @_;
+    my $tx = $ua->post(
+        "$API_URL/knowledge/create" => $HEADER => json => {
+            name            => $kb_name,
+            description     => $kb_name,
+            access_control  => undef,
+        }
+    );
+    return $tx->res->is_success ? decode_json($tx->res->body)->{id} : undef;
+}
+
+sub reset_knowledgebase {
+    my ($kb_id) = @_;
+    my $tx = $ua->post(
+        "$API_URL/knowledge/$kb_id/reset" => $HEADER
+    );
+    return $tx->res->is_success;
+}
+
+sub upload_files_parallel {
+    my ($file_paths) = @_;
+    my @promises;
+
+    for my $file_path (@$file_paths) {
+        push @promises, Mojo::Promise->new(sub {
+            my ($resolve, $reject) = @_;
+
+            $ua->post(
+                "$API_URL/files/" => $HEADER => form => {
+                    file => {file => $file_path->stringify},
+                    
+                } => sub {
+                    my ($ua, $tx)   = @_;
+                    if ($tx->res->is_success) {
+                    my $file_id     = decode_json($tx->res->body)->{id};
+                        $resolve->($file_id);
+                    } else {
+                        say "Failed to upload file $file_path";
+                        $resolve->(undef); # Resolve with undef to avoid rejection
+                    }
+                }
+            );
+        });
+    }
+    my @file_ids;
+    Mojo::Promise
+        ->all(@promises)
+        ->then(sub { push @file_ids, map { @$_ } @_ })
+        ->wait;
+    return grep { defined $_ } @file_ids;
+}
+
+sub add_files_to_knowledgebase_sequential {
+    my ($kb_id, $file_ids) = @_;
+
+    for my $file_id (@$file_ids) {
+        my $tx = $ua->post(
+            "$API_URL/knowledge/$kb_id/file/add" => $HEADER => json => {
+                file_id => $file_id
+            }
+        );
+        if ($tx->res->is_success) {
+        } else {
+            say "Failed to add file ID $file_id to knowledgebase: " . $tx->res->message;
+        }
+    }
+}
+
+sub add_files_to_knowledgebase_parallel {
+    my ($kb_id, $file_ids) = @_;
+    my @promises;
+    for my $file_id (@$file_ids) {
+        push @promises, Mojo::Promise->new(sub {
+            my ($resolve, $reject) = @_;
+            $ua->post(
+                "$API_URL/knowledge/$kb_id/file/add" => $HEADER => json => {
+                    file_id => $file_id
+                } => sub {
+                    my ($ua, $tx) = @_;
+                    if ($tx->res->is_success) {
+                        $resolve->(1);
+                    } else {
+                        say "Failed to add file ID $file_id to knowledgebase: " . $tx->res->message;
+                        $resolve->(undef);
+                    }
+                }
+            );
+        });
+    }
+    Mojo::Promise->all(@promises)->wait;
+}
+
+sub collect_files {
+    my ($dir) = @_;
+    my $cmonkeyignore = path("$dir/.cmonkeyignore");
+    my @ignore_patterns;
+    if ($cmonkeyignore->exists) {
+        @ignore_patterns = map { chomp; $_ } $cmonkeyignore->lines;
+    }
+    return _collect_files_bfs($dir, \@ignore_patterns);
+}
+
+sub _collect_files_bfs {
+    my ($dir, $ignore_patterns) = @_;
+    my @queue = (path($dir));
+    my @files;
+
+    while (@queue) {
+        my $current_path = shift @queue;
+        next if grep { $current_path =~ /$_/ } @{$ignore_patterns};
+
+        if ($current_path->is_file) {
+            push @files, $current_path;
+        }
+        elsif ($current_path->is_dir) {
+            push @queue, $current_path->children;
+        }
+    }
+    return @files;
+}
+
+##
+# CLI
+##
+my ($dir_path, $knowledgebase_name, $verbose);
+GetOptions(
+    'dir=s' => \$dir_path,
+    'kb-name=s'  => \$knowledgebase_name,
+    'v'     => \$verbose
+) or die "Usage: $0 --dir <dir_path> --name <knowledgebase_name>\n";
+
+die "dir path and knowledgebase name are required\n" 
+    unless $dir_path && $knowledgebase_name;
+
+$dir_path = abs_path($dir_path);
+die "Error: dir '$dir_path' does not exist.\n" 
+    unless ( -d $dir_path);
+
+## Get/Create fresh knowledge collection
+my $knowledgebase_id    = get_knowledgebase_id($knowledgebase_name);
+if ( ! $knowledgebase_id) {
+    say "Knowledgebase '$knowledgebase_name' does not exist. Creating it..";
+    $knowledgebase_id   = create_knowledgebase($knowledgebase_name);
+    die "Failed to create knowledgebase\n" unless $knowledgebase_id;
+    say "Created knowledgebase with ID: $knowledgebase_id";
+} else {
+    say "Found knowledgebase with ID: $knowledgebase_id, resyncing.."   if $verbose;
+    reset_knowledgebase($knowledgebase_id);
+    say "Knowledgebase reset successfully."                             if $verbose;
+}
+say "Collecting and flatten files from dir: $dir_path"                  if $verbose;
+my @file_paths  = collect_files($dir_path);
+die "No files found in the dir\n" unless @file_paths;
+
+say "Uploading files..."                                                if $verbose;
+my @file_ids    = upload_files_parallel(\@file_paths);
+
+say "Adding files to knowledgebase..."                                  if $verbose;
+# Note: async based registration of uplodaded files is broken in openwebui, thus this function is commented out for now
+#add_files_to_knowledgebase_parallel($knowledgebase_id, \@file_ids);
+add_files_to_knowledgebase_sequential($knowledgebase_id, \@file_ids);
+say "ok."                                                               if $verbose;
