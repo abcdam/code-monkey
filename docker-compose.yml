@@ -1,0 +1,45 @@
+services:
+  # nginx-fp: # forward proxy
+  #   image: nginx:latest
+  #   container_name: nginx-fp
+  #   ports:
+  #     - "8443:443"
+  #     - "80:808"
+  #   volumes:
+  #     - ./configs/nginx.conf:/etc/nginx/nginx.conf # Mount Nginx config
+  #     - ./logs/nginx:/var/log/nginx # Mount logs for inspection
+  #     - ./configs/certs/server/:/etc/nginx/ssl
+  #   networks:
+  #     - jungle
+
+  openweb-ui:
+    build:
+      context: .
+      dockerfile: owebui.Dockerfile
+    container_name: openweb-ui
+    restart: unless-stopped
+    environment:
+      - DATA_DIR=/assets/data
+    env_file:
+      - configs/.env.dev # Load environment variables from .env.dev
+      - configs/.env.secrets
+    networks:
+      - jungle
+    volumes:
+      - ollama_data:/root/.ollama/models
+      - assets_data:/assets/data
+    ports:
+      - "80:8080"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+
+volumes:
+  ollama_data: # local models & ollama settings
+  assets_data: # files/documents store
+
+networks:
+  jungle:
+    driver: bridge

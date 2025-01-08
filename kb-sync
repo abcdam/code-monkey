@@ -15,7 +15,7 @@ use Config::Tiny;
 use Try::Tiny;
 use Const::Fast;
 
-const my $CONF              => Config::Tiny->read(dirname(abs_path($0)) . '/openwebui.ini');
+const my $CONF              => Config::Tiny->read(dirname(abs_path($0)) . '/configs/openwebui.ini');
 const my $API_URL           => $CONF->{API}{api_url};
 const my $HEADER            => {Authorization => "Bearer $CONF->{API}{token}"};
 const my $KB_CHILDREN_LIMIT => 50;
@@ -30,7 +30,7 @@ sub parse_options {
         'd=s'   => \$options{dir_path},
         'kb=s'  => \$options{kb_name},
         'v'     => \$options{verbose}
-    ) or die "Error: Usage: $0 --d <dir_path> --kb <knowledgebase_name> -v\n";
+    ) or die "Error: Usage: $0 -d <dir_path> --kb <knowledgebase_name> [-v]\n";
 
     die "err: dir path and knowledgebase name are required.\n" 
         unless $options{dir_path} && $options{kb_name};
@@ -130,7 +130,8 @@ sub _make_request {
 sub _get_kb_uid {
     my ($kb_name) = @_;
     my ($success, $data, $err) = _make_request('get', "knowledge/", $HEADER);
-    die "Failed to get all kb ids: $err" unless $success;
+    die "Failed to get all kb ids: $err" 
+        unless $success;
     for my $kb (@$data) {
         return $kb->{id} if $kb->{name} eq $kb_name;
     }
@@ -150,14 +151,16 @@ sub _create_kb {
                 access_control  => undef,
             }
         });
-    die "Failed to create '$kb_name': $err" unless $success;
+    die "Failed to create '$kb_name': $err" 
+        unless $success;
     return $data->{id};
 }
 
 sub _reset_kb {
     my ($kb_id) = @_;
     my ($success, $data, $err) = _make_request('post', "knowledge/$kb_id/reset", $HEADER);
-    die "Failed to reset '$kb_id': $err" unless $success;
+    die "Failed to reset '$kb_id': $err" 
+        unless $success;
     return $success;
 }
 

@@ -34,13 +34,15 @@ show_help() {
 }
 
 build_img() {
-    docker build -t "$IMG_NAME" "$script_dir/"
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048     \
+    -keyout configs/key.key                                 \
+    -out configs/nginx_cert.crt                                   \
+    -subj "/C=US/ST=State/L=City/O=Nginx-rp/CN=0.0.0.0" && \
+    openssl x509 -in configs/nginx_cert.crt -noout -text
+    docker compose up
 }
 
 run_container() {
-    repo_id=$(echo "$IMG_NAME" | cut -d ':' -f1)
-    docker image ls | awk 'NR > 1 {print $1}' | grep -qE "^$repo_id$" \
-        || throw "Docker image name '$IMG_NAME' couldn't be retrieved from local registry "
     
     mkdir -p "$LOGS"
 
