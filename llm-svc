@@ -1,0 +1,100 @@
+#!/bin/dash
+set -e
+. '/usr/lib/helper-func.sh'
+
+SCRIPT_DIR=$(dirname "$(realpath "$0")")
+CONTAINER_NAME='openweb-ui'
+LOGS="$SCRIPT_DIR/logs"
+LOG_FILE_NAME="$(date +"%Y%m%d%H%M")_owebui.log"
+LOG_FILE="$LOGS/$LOG_FILE_NAME"
+PRETTYSYNOP_BIN="$HOME/lib/pretty-synopsis.pl"
+
+alias dcp='docker compose -p code-monkey'
+alias dcf="docker compose -f $SCRIPT_DIR/docker-compose.yml"
+
+show_help() {
+    s="$(basename "$0") [OPTIONS] COMMAND;;"
+    s="${s}This script manages Docker compose operations for open-webui."
+    SYNOPSIS="$s"
+            
+    DESCRIPTION="Options;;-h|h;--help|help ;Prints this text.;;"
+
+    s="Commands;;"
+    s="${s}u|up;Launch the container setup;;"
+    s="${s}d|down;Shutdown;;"
+    s="${s}s|state;Quick glance at running instance.;;"
+    s="${s}r|restart;Restart a running instance.;;"
+    s="${s}p|push <dir> <tag_id>;Make files in <dir> available in open-webui by a reference <tag>.;;"
+    s="${s}l|logs;Livestream logs and gpu load using ttmux.;;"
+    COMMANDS="$s"
+
+    $PRETTYSYNOP_BIN --synopsis="$SYNOPSIS" --description="$DESCRIPTION"
+    $PRETTYSYNOP_BIN --description="$COMMANDS"
+}
+
+
+
+run_container() {
+    mkdir -p "$LOGS"
+    dcf up -d
+    dcp logs -f >> "$LOG_FILE" 2>&1 & # background logging
+}
+
+attach_to_logs() {
+    which ttmux >/dev/null && ttmux -s open-WebUI -w primary -t 1 "watch -n 0.3 nvidia-smi" "tail -f $LOG_FILE"
+}
+
+is_running() {
+    dcp ls | awk '{print $2}' | tail -1 | grep -qE '^running'
+}
+handle_push() {
+    dir="$1" && shift
+    tag="$1" && shift
+    
+    [ -d "$dir" ] || throw "err: passed dir '$dir' not a directory."
+    [ -n "$tag" ] || throw "err: collection must be tagged."
+    "$SCRIPT_DIR"/kb-sync -v -d "$dir" --kb "$tag"
+}
+
+if echo "$1" | grep -qE "sync"; then
+    shift
+    handle_push $@
+    exit 0
+fi
+
+case "$1" in
+    -h|--help|h|help)
+        show_help
+        ;;
+    b|build)
+        DOCKER_BUILDKIT=1 dcf build
+        ;;
+    s|stop|start)
+        ! [ "$1" = 's' ] && dcp "$1"
+        is_running && dcp stop || dcp start
+        ;;
+    u|up)
+        is_running && warn_ok "already running." \
+            || run_container
+        ;;
+    d|down)
+        ! is_running && warn_ok "not running." \
+            || dcf down
+        ;;
+    r|restart)
+        dcf restart
+        ;;
+    stat)
+        dcp ls
+        ;;
+    l|logs)
+        attach_to_logs
+        ;;
+    i|shell)
+        docker exec -it $CONTAINER_NAME bash -c "cd /$2"
+        ;;
+    *)
+        throw "warn: command '$1' not supported"
+        show_help && exit 1
+        ;;
+esac

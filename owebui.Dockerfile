@@ -1,18 +1,22 @@
+FROM perl:slim AS cpanm-builder
+    RUN cpan App::cpanminus
+    # fix shebang
+    RUN sed -i '1s|^.*$|#!/usr/bin/env perl|' /usr/local/bin/cpanm
 FROM ghcr.io/open-webui/open-webui:ollama 
-
-RUN apt update          \
-    && apt install -y   \
-    lshw                \
-    rsync           &&  \
-    rm -rf /var/lib/apt/lists/*
-
-RUN mkdir -p /assets
-
-COPY ./assets/models.yaml /assets/
-COPY ./assets/runtime-prepper.py /assets/
-#COPY ./configs/authority/local-ca.crt
-#RUN update-ca-certificates
-RUN ollama serve & sleep 0.5
-RUN cp -r /root/.ollama /assets/.ollama
-CMD [ "python", "/assets/runtime-prepper.py" ]
-
+    RUN apt-get update          \
+        && apt-get install -y   \
+        lshw                \
+        procps              \
+        lsof                \
+        vim                 \
+        net-tools           \
+        rsync           &&  \
+        rm -rf /var/lib/apt/lists/*
+    COPY --from=cpanm-builder /usr/local/bin/cpanm /usr/local/bin/cpanm
+    RUN  cpanm YAML::Tiny
+    RUN  cpanm Const::Fast
+    COPY ./assets /assets
+    WORKDIR /app/backend
+    RUN mv /assets/puppeteer.pl .
+    RUN mv /assets/log_tee .
+    CMD [ "perl", "puppeteer.pl" ]

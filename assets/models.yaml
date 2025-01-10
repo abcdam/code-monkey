@@ -1,19 +1,19 @@
-# model-family_X:
-#   specific-model-version:
-#     setting_1
-#     setting_2
-#     nested_setting_1:
+# - model-family_X:
+#     specific-model-version:
+#       setting_1
+#       setting_2
+#       nested_setting_1:
+#         ...
+#         ..
+#         .
+#       setting_3
 #       ...
 #       ..
-#       .
-#     setting_3
-#     ...
-#     ..
-#     metadata:
-#       ..
-#       .
+#       metadata:
+#         ..
+#         .
 ---
-deepseek-coder-v2:
+- deepseek-coder-v2:
     16b-lite-base-q3_K_S:
       apiType: openai
       legacyEndpoint: false

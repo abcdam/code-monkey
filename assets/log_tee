@@ -1,0 +1,20 @@
+#!/bin/env perl
+use v5.36.0;
+use Carp;
+my %DEBUG_RE = (
+    owebui => qr/^DEBUG/,
+    ollama => qr/^\[GIN-debug\]\s|\slevel=DEBUG\ssource=/
+);
+@ARGV == 2 && $ARGV[0] =~ /^(ollama|owebui)$/ and my ($filter, $logfile) = @ARGV 
+    or croak "Usage: $0 <ollama|owebui> <file>";
+open my $fh, '>>', $logfile 
+    or die "Could not open file '$logfile': $!\n";
+$fh->autoflush(1);
+$SIG{INT} = $SIG{TERM} = sub {close $fh and exit or die "Could not close file: $!"};
+
+undef @ARGV;
+while (<>) {
+    chomp;
+    say unless /$DEBUG_RE{$filter}/;
+    say $fh $_;
+}
