@@ -17,6 +17,6 @@ FROM ghcr.io/open-webui/open-webui:ollama
     RUN  cpanm Const::Fast
     COPY ./assets /assets
     WORKDIR /app/backend
-    RUN mv /assets/puppeteer.pl .
-    RUN mv /assets/log_tee .
-    CMD [ "perl", "puppeteer.pl" ]
+    RUN mv /assets/puppeteer.pl . && mv /assets/log_tee .
+
+    CMD ["perl", "puppeteer.pl"]
