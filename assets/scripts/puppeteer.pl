@@ -22,7 +22,7 @@ use POSIX qw(setsid strftime);
 use Const::Fast;
 use File::Basename;
 use File::Path qw(make_path);
-use lib '/assets';
+use lib './lib';
 use Daemon;
 
 $SIG{TERM} = $SIG{INT} = \&reaper;
@@ -31,7 +31,7 @@ my @KILL_SWITCHES = ();
 $ENV{LD_LIBRARY_PATH} .= ":/usr/local/lib/python3.11/site-packages/torch/lib:/usr/local/lib/python3.11/site-packages/nvidia/cudnn/lib";
 # values partly copied from original at https://github.com/open-webui/open-webui/blob/main/backend/start.sh
 const my $CONF  => {
-    models  => LoadFile('/assets/models.yaml')  // [],
+    models  => LoadFile('/assets/configs/models.yaml')  // [],
     owebui  => {
         port => $ENV{OWEB_PORT}                 // 8080,
         host => $ENV{OWEB_HOST}                 // "0.0.0.0",

@@ -7,13 +7,16 @@ services:
     environment:
       - DATA_DIR=/assets/data
     env_file:
-      - configs/.env.dev
-      - configs/.env.secrets
+      - assets/configs/.env.dev
+      - assets/configs/.env.secrets
     networks:
       - jungle
     volumes:
       - ollama_data:/root/.ollama/models
       - assets_data:/assets/data
+      - ./assets/configs/models.yaml:/assets/configs/models.yaml
+      - ./assets/scripts/Daemon.pm:/app/backend/lib/Daemon.pm
+      - ./assets/scripts/puppeteer.pl:/app/backend/puppeteer.pl
     ports:
       - 80:8080
     deploy:
