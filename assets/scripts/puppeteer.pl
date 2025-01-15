@@ -26,7 +26,7 @@ use lib './lib';
 use Daemon;
 
 $SIG{TERM} = $SIG{INT} = \&reaper;
-my @KILL_SWITCHES = ();
+my @DAEMONS;
 
 $ENV{LD_LIBRARY_PATH} .= ":/usr/local/lib/python3.11/site-packages/torch/lib:/usr/local/lib/python3.11/site-packages/nvidia/cudnn/lib";
 # values partly copied from original at https://github.com/open-webui/open-webui/blob/main/backend/start.sh
@@ -55,15 +55,16 @@ sub run {
         cmd     => $producer_cmd, 
         src     => $NULL_IN, 
         sink    => $sink, 
-        env     => $env 
+        env     => $env,
     };
     my $consumer = {
         cmd => $consumer_cmd, 
-        src => $source 
+        src => $source,
+        uid => basename($consumer_cmd->[0])
     };
     # the order is reversed to make the producer and his children inherit all filehandles from the consumer
     return Daemon->is($consumer)
-                    ->with_child($producer)
+                    ->with_child(basename($producer_cmd->[0]), $producer)
                     ->dispatch();
 }
 
@@ -99,35 +100,31 @@ sub generate_secret {
 }
 
 sub reaper {
-    print "SIGTERM detected. Cleaning up...\n";
-    STDOUT->flush();
-    $_->() for (@KILL_SWITCHES);
+    $_->childproc_reaper() for @DAEMONS;
     exit 0;
 }
 
-my @args = ();
-push @args, 
-    ['ollama', 'serve'], 
-    get_log_processor_cmd('ollama'), 
-    {OLLAMA_HOST => $CONF->{ollama}{host}};
-
-push @KILL_SWITCHES, run(@args)->{killswitch};
-@args = ();
-
 my $owebui_cmd = [
-                    "uvicorn",
-                    "open_webui.main:app",
-                    "--host",
-                    "$CONF->{owebui}{host}",
-                    "--port",
-                    "$CONF->{owebui}{port}",
-                    "--forwarded-allow-ips",
-                    '*'
+    "uvicorn",
+    "open_webui.main:app",
+    "--host",
+    "$CONF->{owebui}{host}",
+    "--port",
+    "$CONF->{owebui}{port}",
+    "--forwarded-allow-ips",
+    '*'
 ];
-push @args, 
-    $owebui_cmd, 
-    get_log_processor_cmd('owebui'), 
-    {WEBUI_SECRET_KEY => $CONF->{secret}->()};
-push @KILL_SWITCHES, run(@args)->{killswitch};
 
-do {sleep 2} while(waitpid(-1, WNOHANG) != -1);
+push my @args, [ 
+        ['ollama', 'serve'], 
+        get_log_processor_cmd('ollama'), 
+        {OLLAMA_HOST => $CONF->{ollama}{host}}
+    ],[ 
+        $owebui_cmd,
+        get_log_processor_cmd('owebui'),
+        {WEBUI_SECRET_KEY => $CONF->{secret}->()}
+    ];
+
+push @DAEMONS, run(@{$_}) for @args;
+
+do {sleep 2} while(waitpid(-1, WNOHANG) != -1); # docker entrypoint is always pid 1
